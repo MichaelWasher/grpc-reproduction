@@ -1,15 +1,26 @@
 #!/bin/bash 
 
 # A small application for configuring the tso and gso flags on the primary interfaces inside the Pods in Kubernetes
-NODES=(<nodes>)
-# i.e. NODES=(worker1 worker2)
-for NODE in $NODES; do
+if [[ "${NODES}" == "" ]]; then
+    NODES=`oc get nodes -l node-role.kubernetes.io/worker="" -o name | cut -d "/" -f 2`
+    echo "Iterating all Worker Nodes:"
+    echo "${NODES}"
+else
+    echo "Iterating over the \$NODES environment variable. Ensure this has all of the desired Nodes listed."
+    echo "If this is unset, the application will default to iterating all Worker nodes."
+fi
 
+# i.e. NODES=(worker1 worker2)
+for NODE in $NODES[@]; do
+    # Delete old Debug Pod
+    oc debug node/worker-0.mwashersamsung.lab.upshift.rdu2.redhat.com --dry-run=client -o name | xargs -n 1 oc delete  || true
+    
     # Start the Debug Pods
     DEBUG_POD=`oc debug -o yaml node/${NODE} -- sleep inf | oc create -f - | grep "pod/" | cut -d " " -f 1 | cut -d "/" -f 2`
+    while [[ $(kubectl get pods ${DEBUG_POD} -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') != "True" ]]; do echo "waiting for debug pod to start" && sleep 1; done
 
     # Get all Pods on Node
-    NAMESPACE_PODS=`kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{";"}{.spec.hostNetwork}{"\n"}' --field-selector spec.nodeName=${NODE}`
+    NAMESPACE_PODS=`kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{";"}{.metadata.name}{";"}{.spec.hostNetwork}{"\n"}{end}' --field-selector spec.nodeName=${NODE},status.phase=Running`
 
     # Define function to run on Node
     function set_sysctl(){

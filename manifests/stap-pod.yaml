@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stap
+  labels:
+    app: stap
+spec:
+  containers:
+  - command:
+    - sleep
+    - inf
+    image: quay.io/mwasher/systemtap:4.9.23
+    name: container-00
+    securityContext:
+      privileged: true
+      runAsUser: 0
+    volumeMounts:
+    - mountPath: /host
+      name: host
+  hostNetwork: true
+  hostPID: true
+  restartPolicy: Never
+  volumes:
+  - hostPath:
+      path: /
+      type: Directory
+    name: host
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - ipc-server
+        topologyKey: "kubernetes.io/hostname"

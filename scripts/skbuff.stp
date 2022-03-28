@@ -1,0 +1,56 @@
+%{
+#include <linux/version.h>
+#include <net/sock.h>
+#include <net/tcp.h>
+#include <net/ip.h>
+#include <linux/skbuff.h>
+%}
+ 
+function get_ip_src:long (skb_param:long) %{
+  struct iphdr *iph;
+  long saddr;
+  iph=ip_hdr((struct sk_buff*)STAP_ARG_skb_param);
+  saddr =(long)iph->saddr;
+  STAP_RETURN(saddr);
+%}
+ 
+function get_ip_dst:long (skb_param:long) %{
+  struct iphdr *iph;
+  long daddr;
+  iph=ip_hdr((struct sk_buff*)STAP_ARG_skb_param);
+  daddr =(long)iph->daddr;
+  STAP_RETURN(daddr);
+%}
+ 
+function get_ip_protocol:long (skb_param:long) %{
+  struct iphdr *iph;
+  long protocol;
+  iph=ip_hdr((struct sk_buff*)STAP_ARG_skb_param);
+  protocol=(long)iph->protocol;
+  STAP_RETURN(protocol);
+%}
+ 
+probe kernel.function("kfree_skb")
+{
+if ($skb)
+{
+protocol = get_ip_protocol($skb)
+if (protocol == 17)
+{
+tcphdr = __get_skb_tcphdr($skb);
+dport = 0;
+        if (tcphdr != 0)
+                {
+                dport = __tcp_skb_dport(tcphdr);
+                sport = __tcp_skb_sport(tcphdr);
+        }
+        if (dport == 60001 || sport == 60001) {
+                printf ("%s PID:%d processname:%s %s args [%s] srcIP=%s dstIP=%s sport=%d dport=%d"
+                        "socket=%x protocol=%d \n", ctime(gettimeofday_s()), pid(),
+                        execname(), probefunc(), $$parms, ip_ntop(get_ip_src($skb)), ip_ntop(get_ip_dst($skb)),
+                        sport, dport, $skb->sk, get_ip_protocol($skb));
+                print_backtrace()
+        }
+}
+}
+}

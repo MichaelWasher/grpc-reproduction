@@ -66,7 +66,7 @@ echo "Starting the pcaps. These will run until failure of killed. Kill with Crtl
 echo "----------------------------------------------------------"
 
 oc exec -t "${debug_pod}" -- sh -c "$pod_script; conntrack_events" &
-oc exec -t "${debug_pod}" -- sh -c "$pod_script; pcap_any" &
+# oc exec -t "${debug_pod}" -- sh -c "$pod_script; pcap_any" &
 
 oc exec -t "${debug_pod}" -- sh -c "$pod_script; pcap_outer ipc-server" &
 oc exec -t "${debug_pod}" -- sh -c "$pod_script; pcap_outer ipc-client" &

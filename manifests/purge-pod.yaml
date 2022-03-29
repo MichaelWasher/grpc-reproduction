@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: purge
+  labels:
+    app: purge
+spec:
+  containers:
+  - command:
+    - sleep
+    - inf
+    image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:34c5a65a07eaa06bcd2c6c16eb408f227656ecdfb1ebb334b188534f34bfa677
+    name: container-00
+    securityContext:
+      privileged: true
+      runAsUser: 0
+    volumeMounts:
+    - mountPath: /host
+      name: host
+  hostNetwork: true
+  hostPID: true
+  restartPolicy: Never
+  volumes:
+  - hostPath:
+      path: /
+      type: Directory
+    name: host
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: app
+            operator: In
+            values:
+            - ipc-server
+        topologyKey: "kubernetes.io/hostname"

@@ -2,7 +2,20 @@
 
 # NOTE: There are sleeps in this to make sure that each application can finish starting before continuing. These may not be long enough and cause an issue, but just re-run this once the flow-rules have expired.
 
-set -x
+PACKET_COUNT=1000
+DEFAULT_OPTIONS="-l64 -n${PACKET_COUNT} -p60001 -4 -f m -v -L -u "
+# set -x
+
+
+# Setup options
+IPCTEST_OPTIONS="$@"
+
+if [[ "$IPCTEST_OPTIONS" == "" ]]; then
+    echo "No options provided. Using default options for ipctest: ${DEFAULT_OPTIONS}"
+    IPCTEST_OPTIONS=${DEFAULT_OPTIONS}
+else
+    echo "Using provided options: ${IPCTEST_OPTIONS}"
+fi
 
 term() {
     echo "Cancelling test..."
@@ -35,13 +48,17 @@ source ./scripts/kill.sh
 oc cp ./ipctest ipc-client:/ipctest
 oc cp ./ipctest ipc-server:/ipctest
 
+# Purge kernel rules
+oc exec -t purge -- sh -c "chroot /host ovs-appctl revalidator/purge"
+
 # Get Pod IPs
 export POD_IP_SERVER=`oc get pods ipc-server -o jsonpath='{.status.podIP}'`
 
 # Run the Test
-oc exec -t ipc-server -- sh -c "/ipctest -r -l64 -n10 -p60001 -4 -f m -v -u -L | tee server_logs" &
+oc exec -t ipc-server -- sh -c "/ipctest -r ${IPCTEST_OPTIONS} | tee server_logs" &
+
 sleep 2
-oc exec -t ipc-client -- sh -c "/ipctest -t -l64 -n10 -p60001 ${POD_IP_SERVER} -f m -v -u -L | tee client_logs" 
+oc exec -t ipc-client -- sh -c "/ipctest -t ${IPCTEST_OPTIONS} ${POD_IP_SERVER} | tee client_logs" 
 
 # Copy results back
 oc cp ipc-server:/server_logs ./logs/server_logs

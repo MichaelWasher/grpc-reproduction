@@ -10,6 +10,7 @@ if [[ "${NODE}" == "" ]]; then
     exit 1
 else
     echo "Node '$NODE' was provided to have GSO/TSO to be disabled. Please ensure this is correct before continuing."
+    echo "Also; This script has only been tested on OpenShift 4.9.23. Please ensure that this version is correct"
     read -p "Press ENTER to continue."
 fi
 

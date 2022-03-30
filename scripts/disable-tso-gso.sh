@@ -1,7 +1,7 @@
 #!/bin/bash
 
 NODE=$1
-set -ex
+set -e
 
 # A small application for configuring the tso and gso flags on the primary interfaces inside the Pods on a Node in Kubernetes
 if [[ "${NODE}" == "" ]]; then
@@ -17,12 +17,8 @@ fi
 # Basic check on Node is valid
 oc get nodes -o name ${NODE}
 
-# Delete old Debug Pod
-oc debug node/${NODE} --dry-run=client -o name | xargs -n 1 oc delete || true
-while [[ $(kubectl get pods ${DEBUG_POD} -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') == "True" ]]; do echo "waiting for debug pod removal" && sleep 3; done
-
-# Start the debug Pod and wait to be running
-DEBUG_POD=$(oc debug -o yaml --dry-run=client node/${NODE} -- sleep inf | oc create -f - | grep "pod/" | cut -d " " -f 1 | cut -d "/" -f 2)
+# Ensure debug Pod is present
+DEBUG_POD=$(oc debug -o yaml --dry-run=client node/${NODE} -- sleep inf | oc apply -f - | grep "pod/" | cut -d " " -f 1 | cut -d "/" -f 2)
 while [[ $(kubectl get pods ${DEBUG_POD} -o 'jsonpath={..status.conditions[?(@.type=="Ready")].status}') != "True" ]]; do echo "waiting for debug pod to start" && sleep 3; done
 
 # Get all Pods on Node
@@ -30,7 +26,6 @@ NAMESPACE_PODS=$(kubectl get pods --all-namespaces -o jsonpath='{range .items[*]
 
 # Define function to run on Node
 function set_values_in_pod() {
-    set -x
     # Enter NetNS
     NS=$1
     POD=$2
@@ -48,11 +43,19 @@ function set_values_in_pod() {
     fi
 
     # Perform the Sysctl changes here
+    echo "####################"
+    echo "$POD - BEFORE CHANGES"
+    echo "--------------------"
+    nsenter ${nsenter_parameters} -- ethtool -k eth0 | grep -e segmentation-off
+
     nsenter ${nsenter_parameters} -- ethtool -K eth0 tso off
     nsenter ${nsenter_parameters} -- ethtool -K eth0 gso off
 
     # List changes
+    echo "$POD - AFTER CHANGES"
+    echo "--------------------"
     nsenter ${nsenter_parameters} -- ethtool -k eth0 | grep -e segmentation-off
+    echo "####################"
 }
 
 POD_SCRIPT=$(declare -f set_values_in_pod)
@@ -77,10 +80,16 @@ done
 # Set for all NICs in default NetNS
 function set_values_on_node() {
     for NIC in $(ip -o link show up | cut -d : -f 2 | cut -d "@" -f 1); do
-        echo $NIC
+        echo "####################"
+        echo "$NIC - BEFORE CHANGES"
+        echo "--------------------"
         ethtool -k $NIC | grep "segmentation-off"
         ethtool -K $NIC tso off
         ethtool -K $NIC gso off
+        echo "$NIC - AFTER CHANGES"
+        echo "--------------------"
+        ethtool -k $NIC | grep "segmentation-off"
+        echo "####################"
     done
 }
 

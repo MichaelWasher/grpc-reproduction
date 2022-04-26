@@ -9,7 +9,7 @@ if [[ "${NODE}" == "" ]]; then
     echo "$0 <node-name>"
     exit 1
 else
-    echo "Node '$NODE' was provided to have GSO/TSO to be disabled. Please ensure this is correct before continuing."
+    echo "Node '$NODE' was provided to have GSO/TSO/GRO/TX/RX/LRO to be disabled. Please ensure this is correct before continuing."
     echo "Also; This script has only been tested on OpenShift 4.9.23. Please ensure that this version is correct"
     read -p "Press ENTER to continue."
 fi
@@ -46,15 +46,18 @@ function set_values_in_pod() {
     echo "####################"
     echo "$POD - BEFORE CHANGES"
     echo "--------------------"
-    nsenter ${nsenter_parameters} -- ethtool -k eth0 | grep -e segmentation-off
-
-    nsenter ${nsenter_parameters} -- ethtool -K eth0 tso off
-    nsenter ${nsenter_parameters} -- ethtool -K eth0 gso off
-
+    nsenter ${nsenter_parameters} -- ethtool -k eth0 
+    echo "--------------------"
+    nsenter ${nsenter_parameters} -- ethtool -K eth0 tso off || true
+    nsenter ${nsenter_parameters} -- ethtool -K eth0 gso off || true
+    nsenter ${nsenter_parameters} -- ethtool -K eth0 rx off || true
+    nsenter ${nsenter_parameters} -- ethtool -K eth0 tx off || true
+    nsenter ${nsenter_parameters} -- ethtool -K eth0 gro off || true
+    nsenter ${nsenter_parameters} -- ethtool -K eth0 lro off || true
     # List changes
     echo "$POD - AFTER CHANGES"
     echo "--------------------"
-    nsenter ${nsenter_parameters} -- ethtool -k eth0 | grep -e segmentation-off
+    nsenter ${nsenter_parameters} -- ethtool -k eth0 
     echo "####################"
 }
 
@@ -83,12 +86,17 @@ function set_values_on_node() {
         echo "####################"
         echo "$NIC - BEFORE CHANGES"
         echo "--------------------"
-        ethtool -k $NIC | grep "segmentation-off"
-        ethtool -K $NIC tso off
-        ethtool -K $NIC gso off
+        ethtool -k $NIC
+        echo "--------------------"
+        ethtool -K $NIC tso off || true
+        ethtool -K $NIC gso off || true
+        ethtool -K $NIC rx off || true
+        ethtool -K $NIC tx off || true
+        ethtool -K $NIC gro off || true
+        ethtool -K $NIC lro off || true
         echo "$NIC - AFTER CHANGES"
         echo "--------------------"
-        ethtool -k $NIC | grep "segmentation-off"
+        ethtool -k $NIC
         echo "####################"
     done
 }
@@ -98,5 +106,5 @@ oc exec -t "${DEBUG_POD}" -- chroot /host sh -c "${NDOE_SCRIPT}; set_values_on_n
 
 ## Output complete
 echo "##########################################"
-echo "GSO and TSO are off for all interfaces on ${NODE}"
+echo "GSO, TSO, GRO, LRO, TX, RX are off for all interfaces on ${NODE}"
 echo "##########################################"
